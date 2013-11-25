@@ -1,6 +1,7 @@
 import urllib2
 from BeautifulSoup import BeautifulSoup
 from datetime import datetime
+import time
 
 author_base_url = 'https://eksisozluk.com/biri/'
 
@@ -85,7 +86,14 @@ def get_entry_count_for_year(author,year):
     print str(no_results_arr)
     print 'really hard'
     return no_results
-    
+
+def get_entry_count_all_years(author):
+    cYear = int(datetime.now().strftime('%Y'))
+    entry_count = []
+    for year in range(1999,cYear+1):
+        entry_count.append(get_entry_count_for_year(author,year))
+    return entry_count
+ 
 if __name__ == "__main__":
-    a = get_entry_count_for_year('chinaski',2002)
+    a = get_entry_count_all_years('chinaski')
     print str(a)
