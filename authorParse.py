@@ -33,11 +33,9 @@ def get_entry_count_random_date(author, year1, month1, day1, year2, month2, day2
 
 def correct_to_date(year, month, day):
     today = datetime.now()
-    date = str(today).split(' ')[0]
-    dateBroken = date.split('-')
-    cYear = int(dateBroken[0])
-    cMonth = int(dateBroken[1])
-    cDay = int(dateBroken[2])
+    cYear = int(today.strftime('%Y'))
+    cMonth = int(today.strftime('%m'))
+    cDay = int(today.strftime('%d'))
     if year > cYear:
         year = cYear
         month = cMonth
