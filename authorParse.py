@@ -3,6 +3,9 @@ from BeautifulSoup import BeautifulSoup
 from datetime import datetime
 import time
 import sys
+import Queue
+import threading
+
 
 author_base_url = 'https://eksisozluk.com/biri/'
 
@@ -16,6 +19,7 @@ def get_number_of_pages(author):
 
     print x
     return int(x)
+
 
 def get_entry_count_random_date(author, year1, month1, day1, year2, month2, day2):
     year2, month2, day2 = correct_to_date(year2, month2, day2)
@@ -32,6 +36,7 @@ def get_entry_count_random_date(author, year1, month1, day1, year2, month2, day2
     no_results = int(title[1:len(x)-1])
     return no_results
 
+
 def correct_to_date(year, month, day):
     today = datetime.now()
     cYear = int(today.strftime('%Y'))
@@ -47,6 +52,7 @@ def correct_to_date(year, month, day):
     elif year == cYear and month == cMonth and day > cDay:
         day = cDay
     return [year, month, day]
+
 
 def get_entry_count_for_year(author,year):
     no_results = get_entry_count_random_date(author, year, 1, 1, year, 12, 31)
@@ -86,15 +92,89 @@ def get_entry_count_for_year(author,year):
     print 'really hard'
     return no_results
 
+
+def get_entry_count_for_year_per_month(author, year):
+    def get_entry_counts(author, month, q):
+        days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        day = days_in_month[month-1]
+        no_results = get_entry_count_random_date(author, year, month, 1, year, month, day)
+        q.put([month, no_results])
+
+    q = Queue.Queue()
+    thread_list = []
+    months = range(1,13)
+    for m in months:
+        t = threading.Thread(target=get_entry_counts, args = (author, m, q))
+        thread_list.append(t)
+
+    for t in thread_list:
+        t.start()
+
+    for t in thread_list:
+        t.join()
+    result = []
+    while not q.empty():
+        result.append(q.get())
+    result_sorted = range(1,13)
+    for res in result:
+        result_sorted[res[0]-1] = res[1]
+    return result_sorted, sum(result_sorted)
+
+def get_entry_count_all_per_month(author):
+    def get_entry_counts(author, month, year, q):
+        days_in_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        day = days_in_month[month-1]
+        no_results = get_entry_count_random_date(author, year, month, 1, year, month, day)
+        q.put([year, month, no_results])
+
+    cYear = int(datetime.now().strftime('%Y'))
+    q = Queue.Queue()
+    thread_list = []
+    months = range(1,13)
+    years = range(1999, cYear + 1)
+    for y in years:
+        for m in months:
+            t = threading.Thread(target=get_entry_counts, args = (author, m, y, q))
+            thread_list.append(t)
+
+    for t in thread_list:
+        t.start()
+
+    for t in thread_list:
+        t.join()
+    result = []
+    while not q.empty():
+        result.append(q.get())
+    result_year_sorted = [[] for x in range(15)]
+    result_sorted = [range(12) for x in range(15)]
+    for res in result:
+        result_year_sorted[res[0]-1999].append(res[1:])
+    for res in range(len(result_year_sorted)):
+        for r in result_year_sorted[res]:
+            result_sorted[res][r[0]-1] = r[1]
+    return result_sorted
+
+
 def get_entry_count_all_years(author):
     cYear = int(datetime.now().strftime('%Y'))
     entry_count = []
     for year in range(1999,cYear+1):
         entry_count.append(get_entry_count_for_year(author,year))
     return entry_count
+
+def get_entry_count_all_years_per_month(author):
+    cYear = int(datetime.now().strftime('%Y'))
+    entry_count = []
+    for year in range(1999,cYear+1):
+        entry_count.append(get_entry_count_for_year_per_month(author,year)[0])
+    return entry_count
  
 if __name__ == "__main__":
     author = sys.argv[1]
-    a = get_entry_count_all_years(author)
+    #year = sys.argv[2]
+    st_time = time.time()
+    a = get_entry_count_all_per_month(author)
+    #a = get_entry_count_all_years_per_month(author)
     print str(a)
-    print str(sum(a))
+    print str(time.time()-st_time)
+    #print str(sum(a))
