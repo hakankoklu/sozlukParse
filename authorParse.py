@@ -20,12 +20,22 @@ def get_number_of_pages(author):
     print x
     return int(x)
 
+def author_name_dash(author):
+    author_words = author.split(' ')
+    author_new = '-'.join(author_words)
+    if len(author_words) > 1:
+        author = author_new
+    return author
 
 def get_entry_count_random_date(author, year1, month1, day1, year2, month2, day2):
     year2, month2, day2 = correct_to_date(year2, month2, day2)
     url_part1 = 'https://eksisozluk.com/ara?searchform.keywords=&searchform.author='
     url_part2 = '&searchform.when.from='+str(year1)+'-'+str(month1)+'-'+str(day1)+'&searchform.when.to='
     url_part3 = str(year2)+'-'+str(month2)+'-'+str(day2)+'&searchform.sortorder=date'
+    author_words = author.split(' ')
+    author_new = '%20'.join(author_words)
+    if len(author_words) > 1:
+        author = author_new
     search_url = url_part1 + author + url_part2 + url_part3
     page = urllib2.urlopen(search_url)
     soup = BeautifulSoup(page)
@@ -168,13 +178,67 @@ def get_entry_count_all_years_per_month(author):
     for year in range(1999,cYear+1):
         entry_count.append(get_entry_count_for_year_per_month(author,year)[0])
     return entry_count
- 
+
+def get_karma(author):
+    author = author_name_dash(author)
+    url_author = 'https://eksisozluk.com/biri/%s' % author
+    page = urllib2.urlopen(url_author)
+    soup = BeautifulSoup(page)
+
+    x = soup.body.find('h1', attrs={'id' : 'user-profile-title'}).small.text
+    xx = x.split(' ')
+    karma_desc = ' '.join(xx[:len(xx)-12])
+    karma = int(xx[len(xx)-1].strip('()'))
+    return karma, karma_desc
+
+def get_page_count_of_author_page(author):
+    author = author_name_dash(author)
+    url_page = 'https://eksisozluk.com/%s' % author
+    page = urllib2.urlopen(url_page)
+    soup = BeautifulSoup(page)
+
+    x = soup.body.find('div', attrs = {'class': 'pager'})['data-pagecount']
+    return int(x)
+
+def get_authors_from_page(author):
+    author = author_name_dash(author)
+    page_count = get_page_count_of_author_page(author)
+    print page_count
+    url_page = 'https://eksisozluk.com/%s' % author
+    page = urllib2.urlopen(url_page)
+    soup = BeautifulSoup(page)
+
+    url_page = soup.head.find('meta', attrs = {'property': 'og:url'})['content']
+    print url_page
+    authors = {}
+    for p in range(page_count):
+        new_url_page = url_page + '?p=%s' % str(p+1)
+        print new_url_page
+        page = urllib2.urlopen(new_url_page)
+        soup = BeautifulSoup(page)
+        #Not finished, looping over all the pages.
+        for i in range(10):
+            value = str(p*10+i+1)
+            print value
+            entry = soup.body.find('li', attrs = {'value': value})
+            if entry:
+                author = entry.find('footer')['data-author']
+                if authors.get(author):
+                    authors[author] += 1
+                else:
+                    authors[author] = 1
+            else:
+                break
+    return authors
+
 if __name__ == "__main__":
     author = sys.argv[1]
     #year = sys.argv[2]
     st_time = time.time()
-    a = get_entry_count_all_per_month(author)
+    a = get_authors_from_page(author)
+    #a = get_entry_count_random_date('madonnanin yagli zencisi 2',2013,12,1,2013,12,16)
+    #a = get_entry_count_all_per_month(author)
     #a = get_entry_count_all_years_per_month(author)
-    print str(a)
+    print a
     print str(time.time()-st_time)
     #print str(sum(a))
