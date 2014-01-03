@@ -5,7 +5,9 @@ import time
 import sys
 import Queue
 import threading
-
+import pickle
+import random
+import mechanize
 
 author_base_url = 'https://eksisozluk.com/biri/'
 
@@ -20,12 +22,13 @@ def get_number_of_pages(author):
     print x
     return int(x)
 
-def author_name_dash(author):
+def author_name_blank(author,ch):
     author_words = author.split(' ')
-    author_new = '-'.join(author_words)
+    author_new = ch.join(author_words)
     if len(author_words) > 1:
         author = author_new
     return author
+
 
 def get_entry_count_random_date(author, year1, month1, day1, year2, month2, day2):
     year2, month2, day2 = correct_to_date(year2, month2, day2)
@@ -180,7 +183,7 @@ def get_entry_count_all_years_per_month(author):
     return entry_count
 
 def get_karma(author):
-    author = author_name_dash(author)
+    author = author_name_blank(author, '%20')
     url_author = 'https://eksisozluk.com/biri/%s' % author
     page = urllib2.urlopen(url_author)
     soup = BeautifulSoup(page)
@@ -191,29 +194,44 @@ def get_karma(author):
     karma = int(xx[len(xx)-1].strip('()'))
     return karma, karma_desc
 
-def get_page_count_of_author_page(author):
-    author = author_name_dash(author)
-    url_page = 'https://eksisozluk.com/%s' % author
+def get_page_count_of_author_page(author, url_given = ''):
+    if url_given:
+        url_page = url_given
+    else:
+        author = author_name_blank(author, '%20')
+        url_page = 'https://eksisozluk.com/%s' % author
     page = urllib2.urlopen(url_page)
     soup = BeautifulSoup(page)
 
-    x = soup.body.find('div', attrs = {'class': 'pager'})['data-pagecount']
-    return int(x)
+    x = soup.body.find('div', attrs = {'class': 'pager'})
+    if x:
+        count = x['data-pagecount']
+    else:
+        count = 1
+    return int(count)
 
-def get_authors_from_page(author):
-    author = author_name_dash(author)
-    page_count = get_page_count_of_author_page(author)
+def get_authors_from_page(author, s = False, pageCode = '', page_start = 0):
+    if pageCode:
+        author = author_name_blank(author, '-')
+        url_page = 'https://eksisozluk.com/%s--%s' % (author, pageCode)
+        page_count = get_page_count_of_author_page(author, url_page)
+    else:
+        author = author_name_blank(author, '%20')
+        page_count = get_page_count_of_author_page(author)
+        url_page = 'https://eksisozluk.com/%s' % author
+        page = urllib2.urlopen(url_page)
+        soup = BeautifulSoup(page)
+        url_page = soup.head.find('meta', attrs = {'property': 'og:url'})['content']
+    p_pro = pickle.HIGHEST_PROTOCOL
     print page_count
-    url_page = 'https://eksisozluk.com/%s' % author
-    page = urllib2.urlopen(url_page)
-    soup = BeautifulSoup(page)
-
-    url_page = soup.head.find('meta', attrs = {'property': 'og:url'})['content']
     print url_page
     authors = {}
-    for p in range(page_count):
+    if page_start != 0:
+        a_file = open('author_baslik_%s' % str(p-1),'r')
+        authors = pickle.load(a_file)
+        a_file.close()
+    for p in range(page_start, page_count):
         new_url_page = url_page + '?p=%s' % str(p+1)
-        print new_url_page
         page = urllib2.urlopen(new_url_page)
         soup = BeautifulSoup(page)
         #Not finished, looping over all the pages.
@@ -229,16 +247,68 @@ def get_authors_from_page(author):
                     authors[author] = 1
             else:
                 break
+        if s and p % 10 == 0:
+            a_file = open('author_baslik_%s' % str(p),'w')
+            pickle.dump(authors, a_file, p_pro)
+            a_file.close()
+    return authors
+
+def login_to_sozluk():
+    br = mechanize.Browser()
+    br.open("https://eksisozluk.com/giris")
+    print br.title()
+
+    br.select_form(nr=2)
+    br['UserName'] = 'hakan'
+    br['Password'] = '3e8msn'
+    br.submit()
+    return br
+
+def get_authors_from_page_with_mechanize(thread_title, url = ''):
+    if url:
+        url_page = url
+    else:
+        author = author_name_blank(thread_title, '%20')
+        url_page = 'https://eksisozluk.com/%s' % author
+    br = login_to_sozluk()
+    soup = BeautifulSoup(br.open(url_page))
+
+    page_count = 1
+    x = soup.body.find('div', attrs = {'class': 'pager'})
+    if x:
+        page_count = int(x['data-pagecount'])
+
+    url_page = soup.head.find('meta', attrs = {'property': 'og:url'})['content']
+    p_pro = pickle.HIGHEST_PROTOCOL
+    print page_count
+    print url_page
+    authors = {}
+
+    for p in range(page_count):
+        if p != 0:
+            new_url_page = url_page + '?p=%s' % str(p+1)
+            page = br.open(new_url_page)
+            soup = BeautifulSoup(page)
+        #Not finished, looping over all the pages.
+        for i in range(100):
+            value = str(p*100+i+1)
+            entry = soup.body.find('li', attrs = {'value': value})
+            if entry:
+                author = entry.find('footer')['data-author']
+                if authors.get(author):
+                    authors[author] += 1
+                else:
+                    authors[author] = 1
+            else:
+                break
+        print p
     return authors
 
 if __name__ == "__main__":
-    author = sys.argv[1]
-    #year = sys.argv[2]
-    st_time = time.time()
-    a = get_authors_from_page(author)
+    #author = sys.argv[1]
+    aa = get_authors_from_page_with_mechanize('google')    
+    print aa
     #a = get_entry_count_random_date('madonnanin yagli zencisi 2',2013,12,1,2013,12,16)
     #a = get_entry_count_all_per_month(author)
     #a = get_entry_count_all_years_per_month(author)
-    print a
-    print str(time.time()-st_time)
     #print str(sum(a))
